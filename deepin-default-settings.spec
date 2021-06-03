@@ -7,7 +7,7 @@
 
 Name:          deepin-default-settings
 Version:       2020.03.25
-Release:       1
+Release:       2
 Summary:       This library is designed to be exception-free and avoid Qt application developer do direct access to glib/glibmm
 License:       GPLv3
 URL:           https://uos-packages.deepin.com/uos/pool/main/d/deepin-default-settings/
@@ -28,6 +28,18 @@ install -d %{buildroot}%{_sysconfdir}/skel/{Desktop,Documents,Downloads,Pictures
 install -Dm644 %{_datadir}/applications/dde-computer.desktop %{buildroot}%{_sysconfdir}/skel/Desktop/dde-computer.desktop
 install -Dm755 %{_datadir}/applications/dde-trash.desktop %{buildroot}%{_sysconfdir}/skel/Desktop/dde-trash.desktop
 
+%post
+for i in $(getent passwd | grep -v nologin | grep -v halt | grep -v shutdown | grep -v sync); do
+  userid=$(echo "$i" | awk -F ':' '{print $3}')
+  groupid=$(echo "$i" | awk -F ':' '{print $4}')
+  userhome=$(echo "$i" | awk -F ':' '{print $6}')
+  if [ ! -f /"${userhome}"/Desktop/dde-computer.desktop ] && [ ! -f /"${userhome}"/Desktop/dde-trash.desktop ]; then
+    install -o "${userid}" -g "${groupid}" -Dm644 /etc/skel/.config/user-dirs.dirs /"${userhome}"/.config/user-dirs.dirs || true
+    install -o "${userid}" -g "${groupid}" -d /"${userhome}"/{Desktop,Documents,Downloads,Pictures,Pictures/Wallpapers,Music,Videos,.Public,.Templates} || true
+    install -o "${userid}" -g "${groupid}" -Dm644 /etc/skel/.config/autostart/dde-first-run.desktop /"${userhome}"/.config/autostart/dde-first-run.desktop || true
+    chown -R "${userid}":"${groupid}" "${userhome}"
+  fi
+done
 
 %files
 %{_sysconfdir}/apt
@@ -65,5 +77,8 @@ install -Dm755 %{_datadir}/applications/dde-trash.desktop %{buildroot}%{_sysconf
 %license LICENSE
 
 %changelog
+* Wed Dec 16 2020 weidong <weidong@uniontech.com> - 2020.03.25-2
+- Update user desktop
+
 * Thu Sep 10 2020 chenbo pan <panchenbo@uniontech.com> - 2020.03.25-1
 - Project init.
