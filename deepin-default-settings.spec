@@ -1,34 +1,58 @@
-%bcond_with check
-%global _unpackaged_files_terminate_build 0 
-%global debug_package   %{nil}
-%global common_description %{expand:default settings for deepin destkop environment
- This package does tweaking and to provide better experience of deepin desktop
- environment.}
+Name:           deepin-default-settings
+Version:        2020.10.26
+Release:        1
+Summary:        default settings for deepin destkop environment
+License:        GPLv3
+URL:            https://github.com/linuxdeepin/default-settings
+Source0:        %{name}_%{version}+euler.orig.tar.xz
 
-Name:          deepin-default-settings
-Version:       2020.03.25
-Release:       2
-Summary:       This library is designed to be exception-free and avoid Qt application developer do direct access to glib/glibmm
-License:       GPLv3
-URL:           https://uos-packages.deepin.com/uos/pool/main/d/deepin-default-settings/
-Source0:       https://uos-packages.deepin.com/uos/pool/main/d/%{name}/%{name}_%{version}.orig.tar.xz
-BuildRequires:	   dde-desktop
+BuildArch:      noarch
+BuildRequires:  dde-desktop
+BuildRequires:  deepin-wallpapers
 
 %description
-%{common_description}
+default settings for deepin destkop environment.
+
+%package        -n deepin-default-settings-tuning
+Summary:        default settings for deepin destkop environment
+%description    -n deepin-default-settings-tuning
+This package includes files to override cups default page and fcitx icon.
 
 %prep
-%setup
+%autosetup -n %{name}-%{version}+euler
 
 %build
-make
+
+
 %install
 %make_install
-install -d %{buildroot}%{_sysconfdir}/skel/{Desktop,Documents,Downloads,Pictures,Videos}
+
+mkdir -p  %{buildroot}/usr/share/deepin-default-settings/cups-filters/
+mkdir -p  %{buildroot}/usr/share/deepin-default-settings/google-chrome/
+mkdir -p  %{buildroot}/usr/share/deepin-default-settings/fcitx/
+install -Dm644 tuning/cups-filters/*.pdf  %{buildroot}/usr/share/deepin-default-settings/cups-filters/
+install -Dm644 tuning/google-chrome/*.tar %{buildroot}/usr/share/deepin-default-settings/google-chrome/
+install -Dm644 tuning/fcitx/*.png  %{buildroot}/usr/share/deepin-default-settings/fcitx/
+
+install -d %{buildroot}%{_sysconfdir}/skel/{Desktop,Documents,Downloads,Pictures/Wallpapers,Music,Videos,.Public,.Templates}
+install -d %{buildroot}%{_sysconfdir}/skel/.local/share/Trash
 install -Dm644 %{_datadir}/applications/dde-computer.desktop %{buildroot}%{_sysconfdir}/skel/Desktop/dde-computer.desktop
 install -Dm755 %{_datadir}/applications/dde-trash.desktop %{buildroot}%{_sysconfdir}/skel/Desktop/dde-trash.desktop
+for file in `ls /usr/share/wallpapers/deepin/`
+do
+    ln -svf /usr/share/wallpapers/deepin/$file %{buildroot}%{_sysconfdir}/skel/Pictures/Wallpapers/$file
+done
 
 %post
+## when root first login, init
+if [ ! -f /root/Desktop/dde-computer.desktop ] && [ ! -f /root/Desktop/dde-trash.desktop ] ; then
+    install -Dm644 /etc/skel/.config/user-dirs.dirs /root/.config/user-dirs.dirs || true
+    install -d /root/{Desktop,Documents,Downloads,Pictures/Wallpapers,Music,Videos,.Public,.Templates} || true
+    install -Dm644 /etc/skel/.config/autostart/dde-first-run.desktop /root/.config/autostart/dde-first-run.desktop || true
+        install -m644 /etc/skel/Pictures/Wallpapers/*.jpg /root/Pictures/Wallpapers/ || true
+        install -m644 /etc/skel/Music/bensound-sunny.mp3   /root//Music/ || true
+fi
+
 for i in $(getent passwd | grep -v nologin | grep -v halt | grep -v shutdown | grep -v sync); do
   userid=$(echo "$i" | awk -F ':' '{print $3}')
   groupid=$(echo "$i" | awk -F ':' '{print $4}')
@@ -41,18 +65,38 @@ for i in $(getent passwd | grep -v nologin | grep -v halt | grep -v shutdown | g
   fi
 done
 
+# %sysctl_apply deepin.conf
+
+%post -n deepin-default-settings-tuning
+
+for i in 16 22 24 32 48 128 ;do
+    [ -f /usr/share/icons/hicolor/${i}x${i}/apps/fcitx.png ] && rm -f /usr/share/icons/hicolor/${i}x${i}/apps/fcitx.png
+done
+[ -f /usr/share/icons/hicolor/scalable/apps/fcitx.svg ] && rm -f /usr/share/icons/hicolor/scalable/apps/fcitx.svg
+install -Dm644 /usr/share/deepin-default-settings/fcitx/fcitx.png /usr/share/icons/hicolor/16x16/apps/fcitx.png || true
+
+[ -f /usr/share/icons/hicolor/16x16/status/fcitx-kbd.png ] && rm -f /usr/share/icons/hicolor/16x16/status/fcitx-kbd.png
+install -Dm644 /usr/share/deepin-default-settings/fcitx/fcitx.png /usr/share/icons/hicolor/16x16/status/fcitx-kbd.png || true
+
+rm -f /etc/apt/sources.list.d/google-chrome*.list
+if [ -f /etc/opt/chrome/policies/recommended/defalut-plugins-settings.json ];then
+    rm -f /etc/opt/chrome/policies/recommended/defalut-plugins-settings.json
+fi
+
 %files
-%{_sysconfdir}/apt
-%{_sysconfdir}/X11/xorg.conf.d/50-synaptics.conf
-%{_sysconfdir}/X11/xorg.conf.d/75-wacom.conf
+%license LICENSE
+## conflicts with file from package systemd
+%exclude %{_sysconfdir}/X11/xinit/xinitrc.d/50-systemd-user.sh
+## conflicts with file from package shared-mime-info
+%exclude %{_datadir}/applications/mimeapps.list
+%{_sysconfdir}/X11/xorg.conf.d/*.conf
 %{_sysconfdir}/binfmt.d/wine.conf
-%{_sysconfdir}/fonts/conf.d/10-enhance-rending.conf
-%{_sysconfdir}/fonts/conf.d/55-language-deepin-zh-cn.conf
-%{_sysconfdir}/fonts/conf.d/55-language-deepin-zh-hk.conf
-%{_sysconfdir}/fonts/conf.d/55-language-deepin-zh-tw.conf
+%{_sysconfdir}/fonts/conf.d/*.conf
 %{_sysconfdir}/gimp/2.0/fonts.conf
 %{_sysconfdir}/lscolor-256color
+%{_sysconfdir}/modprobe.d/8821ce.conf
 %{_sysconfdir}/modprobe.d/iwlwifi.conf
+%{_sysconfdir}/skel/*
 %{_sysconfdir}/skel/.config/SogouPY/sogouEnv.ini
 %{_sysconfdir}/skel/.config/Trolltech.conf
 %{_sysconfdir}/skel/.config/autostart/dde-first-run.desktop
@@ -60,23 +104,27 @@ done
 %{_sysconfdir}/skel/.config/user-dirs.dirs
 %{_sysconfdir}/skel/.icons/default/index.theme
 %{_sysconfdir}/skel/Music/bensound-sunny.mp3
-%{_sysconfdir}/skel/*
 %{_sysconfdir}/sudoers.d/01_always_set_sudoers_home
 /lib/udev/rules.d/99-deepin.rules
 %{_bindir}/dde-first-run
-/usr/lib/sysctl.d/deepin.conf
+#服务器不需要桌面版调优参数
+%exclude %{_sysctldir}/deepin.conf
 %{_datadir}/applications/deepin/dde-mimetype.list
 %{_datadir}/deepin-default-settings/fontconfig.json
-%{_datadir}/fontconfig/conf.avail/10-enhance-rending.conf
-%{_datadir}/fontconfig/conf.avail/55-language-deepin-zh-cn.conf
-%{_datadir}/fontconfig/conf.avail/55-language-deepin-zh-hk.conf
-%{_datadir}/fontconfig/conf.avail/55-language-deepin-zh-tw.conf
+%{_datadir}/fontconfig/conf.avail/*.conf
 %{_datadir}/mime/packages/deepin-workaround.xml
 %{_datadir}/mime/wine-ini.xml
 %{_datadir}/music/bensound-sunny.mp3
-%license LICENSE
+
+%files  -n deepin-default-settings-tuning
+%{_datadir}/deepin-default-settings/cups-filters/*.pdf
+%{_datadir}/deepin-default-settings/google-chrome/*.tar
+%{_datadir}/deepin-default-settings/fcitx/*.png
 
 %changelog
+* Mon Jul 12 2021 weidong <weidong@uniontech.com> - 2020.10.26-1
+- Update 2020.10.26
+
 * Wed Dec 16 2020 weidong <weidong@uniontech.com> - 2020.03.25-2
 - Update user desktop
 
